@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - .github/workflows/deoply.yml
+      - tsconfig.json
+      - package.json
+      - src/index.ts
 
 jobs:
   deploy:

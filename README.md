@@ -2,7 +2,7 @@
 
 基于 CloudFlare Workers / Pages 的文件加速下载
 
-**注意：本项目内置我自己的 51 网站统计代码,请自行删除或修改 [`src/index.ts`](/servless/fastfile/blob/main/src/index.ts#L9)**
+**注意：本项目内置我自己的 51 网站统计代码,请自行删除或修改 [`src/index.ts`](src/index.ts#L9)**
 
 ## 部署教程 - Workers
 
