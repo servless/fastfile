@@ -1,61 +1,601 @@
+// _worker.ts
+
+const title = '文件加速下载';
+const subtitle = '快速下载网络文件';
+const inputPlaceholder = '请输入下载链接';
+const tips = '按回车键执行下载';
+const githubUrl = 'https://github.com/servless/fastfile';
+
+const footerJS = `
+<script charset="UTF-8" id="LA_COLLECT" src="//sdk.51.la/js-sdk-pro.min.js"></script>
+<script>LA.init({id:"KjS1VsJ98ywewicI",ck:"KjS1VsJ98ywewicI"})</script>
+`;
+
+const logoSVG = (size: number = 120) => {
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" fill="currentColor" class="bi bi-cloud-arrow-down" viewBox="0 0 16 16">
+	<path fill-rule="evenodd" d="M7.646 10.854a.5.5 0 0 0 .708 0l2-2a.5.5 0 0 0-.708-.708L8.5 9.293V5.5a.5.5 0 0 0-1 0v3.793L6.354 8.146a.5.5 0 1 0-.708.708z"/>
+	<path d="M4.406 3.342A5.53 5.53 0 0 1 8 2c2.69 0 4.923 2 5.166 4.579C14.758 6.804 16 8.137 16 9.773 16 11.569 14.502 13 12.687 13H3.781C1.708 13 0 11.366 0 9.318c0-1.763 1.266-3.223 2.942-3.593.143-.863.698-1.723 1.464-2.383m.653.757c-.757.653-1.153 1.44-1.153 2.056v.448l-.445.049C2.064 6.805 1 7.952 1 9.318 1 10.785 2.23 12 3.781 12h8.906C13.98 12 15 10.988 15 9.773c0-1.216-1.02-2.228-2.313-2.228h-.5v-.5C12.188 4.825 10.328 3 8 3a4.53 4.53 0 0 0-2.941 1.1z"/>
+	</svg>`;
+};
+
+let AntiReptilianUA: string[] = ['netcraft'];
+
+// 根据主机名选择对应的上游地址
+function routeByHosts(host: string): [string, boolean] {
+  // 定义路由表
+  const routes: Record<string, string> = {
+    // 生产环境
+    "quay": "quay.io",
+    "gcr": "gcr.io",
+    "k8s-gcr": "k8s.gcr.io",
+    "k8s": "registry.k8s.io",
+    "ghcr": "ghcr.io",
+    "cloudsmith": "docker.cloudsmith.io",
+    "nvcr": "nvcr.io",
+		"github": "github.com",
+		"gitlab": "gitlab.com",
+
+    // 测试环境
+    "test": "registry-1.docker.io",
+  };
+
+  if (host in routes) {
+		return [routes[host], true];
+  }
+
+  return [host, false];
+}
+
+// 严格检测 URL 是否合法
+function isStrictValidUrl(urlString: string): boolean {
+	// 要求必须有 http(s):// 开头，并且域名中必须包含至少一个点（.）和合法的 TLD（至少2个字母）
+	const regex = /^https?:\/\/((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})(\/[^\s]*)?$/;
+	return regex.test(urlString);
+  }
+
+/** @type {RequestInit} */
+const PREFLIGHT_INIT: RequestInit = {
+  // 预检请求配置
+  headers: new Headers({
+    'access-control-allow-origin': '*', // 允许所有来源
+    'access-control-allow-methods': 'GET,POST,PUT,PATCH,TRACE,DELETE,HEAD,OPTIONS', // 允许的HTTP方法
+    'access-control-max-age': '1728000', // 预检请求的缓存时间
+  }),
+};
+
+/**
+ * 构造响应
+ * @param body 响应体
+ * @param status 响应状态码
+ * @param headers 响应头
+ */
+function makeRes(
+  body: BodyInit | null,
+  status: number = 200,
+  headers: { [key: string]: string } = {}
+): Response {
+  headers['access-control-allow-origin'] = '*'; // 允许所有来源
+  return new Response(body, { status, headers });
+}
+
+/**
+ * 构造新的URL对象
+ * @param urlStr URL字符串
+ * @param base URL base
+ */
+function newUrl(urlStr: string, base: string): URL | null {
+  try {
+    console.log(`Constructing new URL object with path ${urlStr} and base ${base}`);
+    return new URL(urlStr, base);
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
+
+async function nginx(): Promise<string> {
+  const text = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+  <title>Welcome to nginx!</title>
+  <style>
+    body {
+      width: 35em;
+      margin: 0 auto;
+      font-family: Tahoma, Verdana, Arial, sans-serif;
+    }
+  </style>
+  </head>
+  <body>
+  <h1>Welcome to nginx!</h1>
+  <p>If you see this page, the nginx web server is successfully installed and
+  working. Further configuration is required.</p>
+
+  <p>For online documentation and support please refer to
+  <a href="http://nginx.org/">nginx.org</a>.<br/>
+  Commercial support is available at
+  <a href="http://nginx.com/">nginx.com</a>.</p>
+
+  <p><em>Thank you for using nginx.</em></p>
+  </body>
+  </html>
+  `;
+  return text;
+}
+
+async function searchInterface(): Promise<string> {
+  const html = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <title>${title}</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+    :root {
+      --github-color: #f0f6fc;
+      --githubbj-color: #010409;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      justify-content: center; // 新增
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(120deg, #1a90ff 0%, #003eb3 100%);
+      padding: 20px;
+    }
+
+    .container {
+      text-align: center;
+      width: 100%;
+      max-width: 800px;
+      padding: 0 20px;
+      margin: 0 auto; // 修改
+      display: flex; // 新增
+      flex-direction: column; // 新增
+      justify-content: center; // 新增
+      min-height: 70vh; // 新增
+    }
+
+    .github-corner {
+      position: fixed;
+      top: 0;
+      right: 0;
+      z-index: 999;
+    }
+
+    .github-corner svg {
+      fill: var(githubbj-color);
+      color: var(--github-color);
+      position: absolute;
+      top: 0;
+      border: 0;
+      right: 0;
+      width: 80px;
+      height: 80px;
+    }
+
+    .github-corner a,
+    .github-corner a:visited {
+    color: var(--github-color) !important;
+    }
+
+    .github-corner a,
+    .github-corner a:visited {
+    color: transparent !important;
+    text-decoration: none !important;
+    }
+
+    .github-corner .octo-body,
+    .github-corner .octo-arm {
+    fill: var(--github-color) !important;
+    }
+
+    .github-corner:hover .octo-arm {
+      animation: octocat-wave 560ms ease-in-out;
+    }
+
+    @keyframes octocat-wave {
+      0%, 100% {
+        transform: rotate(0);
+      }
+      20%, 60% {
+        transform: rotate(-25deg);
+      }
+      40%, 80% {
+        transform: rotate(10deg);
+      }
+    }
+
+    .logo {
+      margin-bottom: 30px;
+      transition: transform 0.3s ease;
+    }
+    .logo:hover {
+      transform: scale(1.05);
+    }
+    .title {
+      color: white;
+      font-size: 2em;
+      margin-bottom: 10px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .subtitle {
+      color: rgba(255,255,255,0.9);
+      font-size: 1.1em;
+      margin-bottom: 30px;
+    }
+    .search-container {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      height: 50px;
+    }
+    #search-input {
+      flex: 1;
+      padding: 15px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px 0 0 8px;
+      outline: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+    }
+    #search-input {
+      flex: 1;
+      padding: 0 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px 0 0 8px;
+      outline: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+      height: 100%;
+    }
+    #search-button {
+      padding: 0 25px;
+      background-color: #0066ff;
+      border: none;
+      border-radius: 0 8px 8px 0;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #search-button:hover {
+      background-color: #0052cc;
+      transform: translateY(-1px);
+    }
+    #search-button svg {
+      width: 24px;
+      height: 24px;
+    }
+    .tips {
+      color: rgba(255,255,255,0.8);
+      margin-top: 20px;
+      font-size: 0.9em;
+    }
+    @media (max-width: 480px) {
+      .container {
+        padding: 0 15px;
+        min-height: 60vh; // 新增
+      }
+      .github-corner svg {
+        width: 60px;
+        height: 60px;
+      }
+      .github-corner:hover .octo-arm {
+        animation: none;
+      }
+      .github-corner .octo-arm {
+        animation: octocat-wave 560ms ease-in-out;
+      }
+      .search-container {
+        height: 45px;
+      }
+
+      #search-input {
+        padding: 0 15px;
+      }
+
+      #search-button {
+        padding: 0 20px;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <a href="${githubUrl}" target="_blank" class="github-corner" aria-label="View source on Github">
+      <svg viewBox="0 0 250 250" aria-hidden="true">
+        <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
+        <path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path>
+        <path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path>
+      </svg>
+    </a>
+    <div class="container">
+      <div class="logo">${logoSVG(120)}</div>
+			<h1 class="title">${title}</h1>
+			<p class="subtitle">${subtitle}</p>
+			<div class="search-container">
+				<input type="text" id="search-input" placeholder="${inputPlaceholder}">
+				<button id="search-button" title="搜索">
+					<svg focusable="false" aria-hidden="true" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+						<path d="M21 21L16.65 16.65M19 11C19 15.4183 15.4183 19 11 19C6.58172 19 3 15.4183 3 11C3 6.58172 6.58172 3 11 3C15.4183 3 19 6.58172 19 11Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+					</svg>
+				</button>
+			</div>
+			<p class="tips">提示：${tips}</p>
+		</div>
+    <script>
+			function performSearch() {
+				const query = document.getElementById('search-input').value;
+				if (query) {
+					window.location.href = '/search?q=' + encodeURIComponent(query);
+				}
+			}
+
+			document.getElementById('search-button').addEventListener('click', performSearch);
+			document.getElementById('search-input').addEventListener('keypress', function(event) {
+				if (event.key === 'Enter') {
+					performSearch();
+				}
+			});
+    </script>
+		${footerJS}
+  </body>
+  </html>
+  `;
+  return html;
+}
+
+interface ExtendedRequestInit extends RequestInit {
+  cacheTtl?: number;
+}
+
 export default {
-	async fetch(request: Request, env: any) {
-		const url = new URL(request.url);
+  async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
+		const getReqHeader = (key: string): string | null => request.headers.get(key);
 
-		if (url.pathname === '/') {
-			return new Response(
-				`[CDN] eg: https://${request.headers.get('host')}/example.com/file/image.png`
-			);
+		let url = new URL(request.url);
+		const homePage = url.origin;
+		// console.log(url);
+		// console.log(1, url.toString());
+
+		const pathnameFirst = url.pathname;
+		const pathnameArray = pathnameFirst.split('/');
+		// console.log('p', pathnameArray);
+
+		let targetUrl;
+		switch (pathnameArray[1]) {
+			case '':
+				// 首页
+				return new Response(await searchInterface(), {
+					headers: {
+						'Content-Type': 'text/html; charset=UTF-8',
+					},
+				});
+
+			case 'favicon.ico':
+				// 图标
+				// return new Response(null, { status: 204 });
+				return new Response(logoSVG(32), {
+						headers: {
+								'Content-Type': 'image/svg+xml',
+								'Cache-Control': 'public, max-age=86400' // 缓存 1 天
+						}
+				});
+
+			case 'https:':
+			case 'http:':
+					// 确保 pathnameFirst 的开头 `/` 被移除
+					targetUrl = pathnameFirst.startsWith('/') ? pathnameFirst.slice(1) : pathnameFirst;
+					break;
+
+			case 'search':
+				// 搜索
+				targetUrl = url.searchParams.get('q');
+				break;
+
+			default:
+				let shortHost: [string, boolean] = routeByHosts(pathnameArray[1]);
+				// console.log(shortHost, pathnameFirst)
+
+				targetUrl = 'https://' + (shortHost[1]
+					? pathnameFirst.replace(new RegExp(`^/${pathnameArray[1]}/`), `${shortHost[0]}/`)
+					: pathnameFirst.replace(/^\/+/, '')
+				); // 移除所有开头的 `/`
+				break;
 		}
 
-		if (url.pathname === '/favicon.ico') {
-			return new Response(null, { status: 204 });
+		// console.log('target url: ', targetUrl);
+
+		// 不合法的 URL, 跳转到首页
+		if (! isStrictValidUrl(targetUrl)) {
+			return Response.redirect(homePage, 302);
 		}
 
-		const parts = url.pathname.split(/\//);
-		const domain = parts[1];
+		url = new URL(targetUrl);
 
-		const isDomainName = (str: string) => {
-			const domainRegex = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-			return domainRegex.test(str);
-		};
+		const userAgentHeader = request.headers.get('User-Agent');
+		const userAgent: string = userAgentHeader ? userAgentHeader.toLowerCase() : "null";
+		if (env.UA) {
+			AntiReptilianUA = AntiReptilianUA.concat(await ADD(env.UA));
+		}
+		const workers_url = `https://${url.hostname}`;
 
-		let reqURL = await env.datastore.get(domain);
-		if (!reqURL && isDomainName(domain)) {
-			reqURL = 'https://' + domain;
+		// 反爬虫
+		if (AntiReptilianUA.some(fxxk => userAgent.includes(fxxk)) && AntiReptilianUA.length > 0) {
+			// 首页改成一个nginx伪装页
+			return new Response(await nginx(), {
+				headers: {
+					'Content-Type': 'text/html; charset=UTF-8',
+				},
+			});
 		}
 
-		let finalURL = '';
-		if (reqURL) {
-			const queryURL = parts.slice(2).join('/');
-			finalURL = `${reqURL}/${queryURL}${url.search}`;
-			url.host = reqURL.replace(/^https?:\/\//, '');
-		} else {
-			const refURL = request.headers.get('referer');
-			if (refURL) {
-				const refParts = refURL.split(/\//);
-				finalURL = request.url.replace(refParts[2], refParts[3] + '/');
-				url.host = refParts[2];
+		if (userAgent && userAgent.includes('mozilla')) {
+			if (url.pathname === '/') {
+				if (env.URL302) {
+					return Response.redirect(env.URL302, 302);
+				} else if (env.URL) {
+					if (env.URL.toLowerCase() === 'nginx') {
+						// 首页改成一个nginx伪装页
+						return new Response(await nginx(), {
+							headers: {
+								'Content-Type': 'text/html; charset=UTF-8',
+							},
+						});
+					} else {
+						return fetch(new Request(env.URL, request));
+					}
+				}
 			}
 		}
 
-		if (!finalURL) {
-			return new Response(null, { status: 404 });
+		// 修改包含 %2F 和 %3A 的请求
+		if (!/%2F/.test(url.search) && /%3A/.test(url.toString())) {
+			let modifiedUrl = url.toString().replace(/%3A(?=.*?&)/, '%3Alibrary%2F');
+			url = new URL(modifiedUrl);
+			console.log(`handle_url: ${url}`);
 		}
 
-		const modifiedRequest = new Request(finalURL, {
-			headers: request.headers,
-			method: request.method,
-			body: request.body,
-			redirect: 'follow',
+		const parameter: ExtendedRequestInit = {
+			headers: new Headers({
+				'Host': url.hostname,
+				'User-Agent': getReqHeader("User-Agent") || "",
+				'Accept': getReqHeader("Accept") || "",
+				'Accept-Language': getReqHeader("Accept-Language") || "",
+				'Accept-Encoding': getReqHeader("Accept-Encoding") || "",
+				'Connection': 'keep-alive',
+				'Cache-Control': 'max-age=0'
+			}),
+			cacheTtl: 3600
+		};
+
+		// 添加Authorization头
+		if (request.headers.has("Authorization")) {
+			parameter.headers.set("Authorization", getReqHeader("Authorization") || "");
+		}
+
+		// 添加可能存在字段X-Amz-Content-Sha256
+		if (request.headers.has("X-Amz-Content-Sha256")) {
+			parameter.headers.set("X-Amz-Content-Sha256", getReqHeader("X-Amz-Content-Sha256") || "");
+		}
+
+		const original_response: Response = await fetch(new Request(url.toString(), request), parameter);
+		const original_response_clone: Response = original_response.clone();
+		const original_text: ReadableStream<Uint8Array> | null = original_response_clone.body;
+		const response_headers: Headers = original_response.headers;
+		const new_response_headers: Headers = new Headers(response_headers);
+		const status: number = original_response.status;
+
+		// 处理重定向
+		const location = new_response_headers.get("Location");
+		if (location) {
+			console.info(`Found redirection location, redirecting to ${location}`);
+			return await httpHandler(request, location, url.hostname);
+		}
+
+		return new Response(original_text, {
+			status,
+			headers: new_response_headers,
 		});
-
-		const response = await fetch(modifiedRequest);
-		const modifiedResponse = new Response(response.body, response);
-
-		// 添加允许跨域访问的响应头
-		modifiedResponse.headers.set('Access-Control-Allow-Origin', '*');
-
-		return modifiedResponse;
-	},
+  },
 };
+
+/**
+ * 处理HTTP请求
+ * @param req 请求对象
+ * @param pathname 请求路径
+ * @param baseHost 基地址
+ */
+async function httpHandler(req: Request, pathname: string, baseHost: string): Promise<Response> {
+  const reqHdrRaw: Headers = req.headers;
+
+  // 处理预检请求
+  if (req.method === 'OPTIONS' && reqHdrRaw.has('access-control-request-headers')) {
+    return new Response(null, PREFLIGHT_INIT);
+  }
+
+  const rawLen: string = '';
+
+  const reqHdrNew = new Headers(reqHdrRaw);
+  reqHdrNew.delete("Authorization"); // 修复s3错误
+
+  // const refer = reqHdrNew.get('referer');
+
+  const urlStr: string = pathname;
+  const urlObj = newUrl(urlStr, 'https://' + baseHost);
+  if (!urlObj) return new Response("Bad URL", { status: 400 });
+
+  const reqInit: RequestInit = {
+    method: req.method,
+    headers: reqHdrNew,
+    redirect: 'follow',
+    body: req.body,
+  };
+  return await proxy(urlObj, reqInit, rawLen);
+}
+
+/**
+ * 代理请求
+ * @param urlObj URL对象
+ * @param reqInit 请求初始化对象
+ * @param rawLen 原始长度
+ */
+async function proxy(urlObj: URL, reqInit: RequestInit, rawLen: string): Promise<Response> {
+  const res: Response = await fetch(urlObj.href, reqInit);
+  const resHdrOld: Headers = res.headers;
+  const resHdrNew: Headers = new Headers(resHdrOld);
+
+  // 验证长度
+  if (rawLen) {
+    const newLen: string = resHdrOld.get('content-length') || '';
+    const badLen: boolean = (rawLen !== newLen);
+
+    if (badLen) {
+      return makeRes(res.body, 400, {
+        '--error': `bad len: ${newLen}, except: ${rawLen}`,
+        'access-control-expose-headers': '--error',
+      });
+    }
+  }
+
+  const status: number = res.status;
+  resHdrNew.set('access-control-expose-headers', '*');
+  resHdrNew.set('access-control-allow-origin', '*');
+  resHdrNew.set('Cache-Control', 'max-age=1500');
+
+  // 删除不必要的头
+  resHdrNew.delete('content-security-policy');
+  resHdrNew.delete('content-security-policy-report-only');
+  resHdrNew.delete('clear-site-data');
+
+  return new Response(res.body, {
+    status,
+    headers: resHdrNew,
+  });
+}
+
+async function ADD(envadd: string): Promise<string[]> {
+  let addtext = envadd.replace(/[  |"'\r\n]+/g, ',').replace(/,+/g, ',');
+  if (addtext.charAt(0) === ',') addtext = addtext.slice(1);
+  if (addtext.charAt(addtext.length - 1) === ',') addtext = addtext.slice(0, addtext.length - 1);
+  const add = addtext.split(',');
+  return add;
+}
