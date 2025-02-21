@@ -1,16 +1,16 @@
 {
-	"name": "template-worker-typescript",
-	"version": "0.0.0",
+	"name": "fastfile",
+	"version": "0.2.0",
 	"private": true,
 	"scripts": {
-		"deploy": "wrangler publish src/index.ts",
+		"deploy": "wrangler deploy src/index.ts",
 		"dev": "wrangler dev src/index.ts --local",
-		"publish": "wrangler publish",
+		"publish": "wrangler deploy",
 		"start-stackblitz": "WRANGLER_SEND_METRICS=false wrangler dev src/index.ts --local",
 		"test": "vitest"
 	},
 	"devDependencies": {
-		"@cloudflare/workers-types": "^3.0.0",
-		"vitest": "^0.24.5"
+		"@cloudflare/workers-types": "4.20250214.0",
+		"vitest": "3.0.6"
 	}
 }
