@@ -3,5 +3,6 @@
 *-lock.*
 *.lock
 *.log
+.wrangler/
 
 /dist

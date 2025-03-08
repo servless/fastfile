@@ -1,16 +1,17 @@
 {
 	"name": "fastfile",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy src/index.ts",
 		"dev": "wrangler dev src/index.ts --local",
 		"publish": "wrangler deploy",
+		"pages": "wrangler pages deploy pages --project-name fastfile",
 		"start-stackblitz": "WRANGLER_SEND_METRICS=false wrangler dev src/index.ts --local",
 		"test": "vitest"
 	},
 	"devDependencies": {
-		"@cloudflare/workers-types": "4.20250214.0",
-		"vitest": "3.0.6"
+		"@cloudflare/workers-types": "4.20250303.0",
+		"vitest": "3.0.8"
 	}
 }

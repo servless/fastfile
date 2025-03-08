@@ -83,10 +83,10 @@ function makeRes(
  * @param urlStr URL字符串
  * @param base URL base
  */
-function newUrl(urlStr: string, base: string): URL | null {
+function newUrl(urlStr: string): URL | null {
   try {
-    console.log(`Constructing new URL object with path ${urlStr} and base ${base}`);
-    return new URL(urlStr, base);
+    // console.log(`Constructing new URL object with path ${urlStr}`);
+    return new URL(urlStr);
   } catch (err) {
     console.error(err);
     return null;
@@ -368,19 +368,17 @@ interface ExtendedRequestInit extends RequestInit {
 }
 
 export default {
-  async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: any): Promise<Response> {
 		const getReqHeader = (key: string): string | null => request.headers.get(key);
 
 		let url = new URL(request.url);
 		const homePage = url.origin;
-		// console.log(url);
-		// console.log(1, url.toString());
 
 		const pathnameFirst = url.pathname;
 		const pathnameArray = pathnameFirst.split('/');
 		// console.log('p', pathnameArray);
 
-		let targetUrl;
+		let targetUrl = '';
 		switch (pathnameArray[1]) {
 			case '':
 				// 首页
@@ -404,11 +402,12 @@ export default {
 			case 'http:':
 					// 确保 pathnameFirst 的开头 `/` 被移除
 					targetUrl = pathnameFirst.startsWith('/') ? pathnameFirst.slice(1) : pathnameFirst;
+					targetUrl = targetUrl + url.search;
 					break;
 
 			case 'search':
 				// 搜索
-				targetUrl = url.searchParams.get('q');
+				targetUrl = url.searchParams.get('q') ?? '';
 				break;
 
 			default:
@@ -429,6 +428,10 @@ export default {
 			return Response.redirect(homePage, 302);
 		}
 
+		// const workers_url = url.origin;
+		// console.log('workers_url: ', workers_url);
+
+		// targetUrl = targetUrl + url.search;
 		url = new URL(targetUrl);
 
 		const userAgentHeader = request.headers.get('User-Agent');
@@ -436,7 +439,6 @@ export default {
 		if (env.UA) {
 			AntiReptilianUA = AntiReptilianUA.concat(await ADD(env.UA));
 		}
-		const workers_url = `https://${url.hostname}`;
 
 		// 反爬虫
 		if (AntiReptilianUA.some(fxxk => userAgent.includes(fxxk)) && AntiReptilianUA.length > 0) {
@@ -471,50 +473,11 @@ export default {
 		if (!/%2F/.test(url.search) && /%3A/.test(url.toString())) {
 			let modifiedUrl = url.toString().replace(/%3A(?=.*?&)/, '%3Alibrary%2F');
 			url = new URL(modifiedUrl);
-			console.log(`handle_url: ${url}`);
+			// console.log(`handle_url: ${url}`);
 		}
+		// console.log(url.toString());
 
-		const parameter: ExtendedRequestInit = {
-			headers: new Headers({
-				'Host': url.hostname,
-				'User-Agent': getReqHeader("User-Agent") || "",
-				'Accept': getReqHeader("Accept") || "",
-				'Accept-Language': getReqHeader("Accept-Language") || "",
-				'Accept-Encoding': getReqHeader("Accept-Encoding") || "",
-				'Connection': 'keep-alive',
-				'Cache-Control': 'max-age=0'
-			}),
-			cacheTtl: 3600
-		};
-
-		// 添加Authorization头
-		if (request.headers.has("Authorization")) {
-			parameter.headers.set("Authorization", getReqHeader("Authorization") || "");
-		}
-
-		// 添加可能存在字段X-Amz-Content-Sha256
-		if (request.headers.has("X-Amz-Content-Sha256")) {
-			parameter.headers.set("X-Amz-Content-Sha256", getReqHeader("X-Amz-Content-Sha256") || "");
-		}
-
-		const original_response: Response = await fetch(new Request(url.toString(), request), parameter);
-		const original_response_clone: Response = original_response.clone();
-		const original_text: ReadableStream<Uint8Array> | null = original_response_clone.body;
-		const response_headers: Headers = original_response.headers;
-		const new_response_headers: Headers = new Headers(response_headers);
-		const status: number = original_response.status;
-
-		// 处理重定向
-		const location = new_response_headers.get("Location");
-		if (location) {
-			console.info(`Found redirection location, redirecting to ${location}`);
-			return await httpHandler(request, location, url.hostname);
-		}
-
-		return new Response(original_text, {
-			status,
-			headers: new_response_headers,
-		});
+		return httpHandler(request, url.toString());
   },
 };
 
@@ -524,7 +487,8 @@ export default {
  * @param pathname 请求路径
  * @param baseHost 基地址
  */
-async function httpHandler(req: Request, pathname: string, baseHost: string): Promise<Response> {
+async function httpHandler(req: Request, reqURL: string): Promise<Response> {
+	// console.log(1, reqURL, reqURL);
   const reqHdrRaw: Headers = req.headers;
 
   // 处理预检请求
@@ -539,8 +503,8 @@ async function httpHandler(req: Request, pathname: string, baseHost: string): Pr
 
   // const refer = reqHdrNew.get('referer');
 
-  const urlStr: string = pathname;
-  const urlObj = newUrl(urlStr, 'https://' + baseHost);
+  const urlObj = newUrl(reqURL);
+	// console.log(urlObj)
   if (!urlObj) return new Response("Bad URL", { status: 400 });
 
   const reqInit: RequestInit = {
@@ -563,18 +527,29 @@ async function proxy(urlObj: URL, reqInit: RequestInit, rawLen: string): Promise
   const resHdrOld: Headers = res.headers;
   const resHdrNew: Headers = new Headers(resHdrOld);
 
-  // 验证长度
-  if (rawLen) {
-    const newLen: string = resHdrOld.get('content-length') || '';
-    const badLen: boolean = (rawLen !== newLen);
+	// console.log(2, resHdrNew)
+  // 处理重定向
+	if (resHdrNew.has("location")) {
+		const location = resHdrNew.get("location");
+		if (location === null) {
+			return new Response("Location header is null", { status: 500 });
+		}
+		reqInit.redirect = "follow";
+		return proxy(new URL(location), reqInit, resHdrOld.get('content-length') as string);
+	}
 
-    if (badLen) {
-      return makeRes(res.body, 400, {
-        '--error': `bad len: ${newLen}, except: ${rawLen}`,
-        'access-control-expose-headers': '--error',
-      });
-    }
-  }
+  // // 验证长度
+  // if (rawLen) {
+  //   const newLen: string = resHdrOld.get('content-length') || '';
+  //   const badLen: boolean = (rawLen !== newLen);
+
+  //   if (badLen) {
+  //     return makeRes(res.body, 400, {
+  //       '--error': `bad len: ${newLen}, except: ${rawLen}`,
+  //       'access-control-expose-headers': '--error',
+  //     });
+  //   }
+  // }
 
   const status: number = res.status;
   resHdrNew.set('access-control-expose-headers', '*');

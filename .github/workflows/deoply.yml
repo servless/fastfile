@@ -8,7 +8,7 @@ on:
       - .github/workflows/deoply.yml
       - tsconfig.json
       - package.json
-      - src/index.ts
+      - src/**
 
 jobs:
   deploy:

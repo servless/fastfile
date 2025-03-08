@@ -55,15 +55,9 @@ var PREFLIGHT_INIT = {
     // 预检请求的缓存时间
   })
 };
-function makeRes(body, status = 200, headers = {}) {
-  headers["access-control-allow-origin"] = "*";
-  return new Response(body, { status, headers });
-}
-__name(makeRes, "makeRes");
-function newUrl(urlStr, base) {
+function newUrl(urlStr) {
   try {
-    console.log(`Constructing new URL object with path ${urlStr} and base ${base}`);
-    return new URL(urlStr, base);
+    return new URL(urlStr);
   } catch (err) {
     console.error(err);
     return null;
@@ -341,13 +335,13 @@ async function searchInterface() {
 }
 __name(searchInterface, "searchInterface");
 var src_default = {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     const getReqHeader = /* @__PURE__ */ __name((key) => request.headers.get(key), "getReqHeader");
     let url = new URL(request.url);
     const homePage = url.origin;
     const pathnameFirst = url.pathname;
     const pathnameArray = pathnameFirst.split("/");
-    let targetUrl;
+    let targetUrl = "";
     switch (pathnameArray[1]) {
       case "":
         return new Response(await searchInterface(), {
@@ -366,9 +360,10 @@ var src_default = {
       case "https:":
       case "http:":
         targetUrl = pathnameFirst.startsWith("/") ? pathnameFirst.slice(1) : pathnameFirst;
+        targetUrl = targetUrl + url.search;
         break;
       case "search":
-        targetUrl = url.searchParams.get("q");
+        targetUrl = url.searchParams.get("q") ?? "";
         break;
       default:
         let shortHost = routeByHosts(pathnameArray[1]);
@@ -384,7 +379,6 @@ var src_default = {
     if (env.UA) {
       AntiReptilianUA = AntiReptilianUA.concat(await ADD(env.UA));
     }
-    const workers_url = `https://${url.hostname}`;
     if (AntiReptilianUA.some((fxxk) => userAgent.includes(fxxk)) && AntiReptilianUA.length > 0) {
       return new Response(await nginx(), {
         headers: {
@@ -412,44 +406,12 @@ var src_default = {
     if (!/%2F/.test(url.search) && /%3A/.test(url.toString())) {
       let modifiedUrl = url.toString().replace(/%3A(?=.*?&)/, "%3Alibrary%2F");
       url = new URL(modifiedUrl);
-      console.log(`handle_url: ${url}`);
     }
-    const parameter = {
-      headers: new Headers({
-        "Host": url.hostname,
-        "User-Agent": getReqHeader("User-Agent") || "",
-        "Accept": getReqHeader("Accept") || "",
-        "Accept-Language": getReqHeader("Accept-Language") || "",
-        "Accept-Encoding": getReqHeader("Accept-Encoding") || "",
-        "Connection": "keep-alive",
-        "Cache-Control": "max-age=0"
-      }),
-      cacheTtl: 3600
-    };
-    if (request.headers.has("Authorization")) {
-      parameter.headers.set("Authorization", getReqHeader("Authorization") || "");
-    }
-    if (request.headers.has("X-Amz-Content-Sha256")) {
-      parameter.headers.set("X-Amz-Content-Sha256", getReqHeader("X-Amz-Content-Sha256") || "");
-    }
-    const original_response = await fetch(new Request(url.toString(), request), parameter);
-    const original_response_clone = original_response.clone();
-    const original_text = original_response_clone.body;
-    const response_headers = original_response.headers;
-    const new_response_headers = new Headers(response_headers);
-    const status = original_response.status;
-    const location = new_response_headers.get("Location");
-    if (location) {
-      console.info(`Found redirection location, redirecting to ${location}`);
-      return await httpHandler(request, location, url.hostname);
-    }
-    return new Response(original_text, {
-      status,
-      headers: new_response_headers
-    });
+    return httpHandler(request, url.toString());
   }
 };
-async function httpHandler(req, pathname, baseHost) {
+async function httpHandler(req, reqURL) {
+  console.log(1, reqURL, reqURL);
   const reqHdrRaw = req.headers;
   if (req.method === "OPTIONS" && reqHdrRaw.has("access-control-request-headers")) {
     return new Response(null, PREFLIGHT_INIT);
@@ -457,8 +419,8 @@ async function httpHandler(req, pathname, baseHost) {
   const rawLen = "";
   const reqHdrNew = new Headers(reqHdrRaw);
   reqHdrNew.delete("Authorization");
-  const urlStr = pathname;
-  const urlObj = newUrl(urlStr, "https://" + baseHost);
+  const urlObj = newUrl(reqURL);
+  console.log(urlObj);
   if (!urlObj)
     return new Response("Bad URL", { status: 400 });
   const reqInit = {
@@ -474,15 +436,14 @@ async function proxy(urlObj, reqInit, rawLen) {
   const res = await fetch(urlObj.href, reqInit);
   const resHdrOld = res.headers;
   const resHdrNew = new Headers(resHdrOld);
-  if (rawLen) {
-    const newLen = resHdrOld.get("content-length") || "";
-    const badLen = rawLen !== newLen;
-    if (badLen) {
-      return makeRes(res.body, 400, {
-        "--error": `bad len: ${newLen}, except: ${rawLen}`,
-        "access-control-expose-headers": "--error"
-      });
+  console.log(2, resHdrNew);
+  if (resHdrNew.has("location")) {
+    const location = resHdrNew.get("location");
+    if (location === null) {
+      return new Response("Location header is null", { status: 500 });
     }
+    reqInit.redirect = "follow";
+    return proxy(new URL(location), reqInit, resHdrOld.get("content-length"));
   }
   const status = res.status;
   resHdrNew.set("access-control-expose-headers", "*");
