@@ -1,4 +1,4 @@
-// _worker.ts
+// src/index.js
 
 const title = '文件加速下载';
 const subtitle = '快速下载网络文件';
@@ -11,19 +11,19 @@ const footerJS = `
 <script>LA.init({id:"KjS1VsJ98ywewicI",ck:"KjS1VsJ98ywewicI"})</script>
 `;
 
-const logoSVG = (size: number = 120) => {
+const logoSVG = (size = 120) => {
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" fill="currentColor" class="bi bi-cloud-arrow-down" viewBox="0 0 16 16">
 	<path fill-rule="evenodd" d="M7.646 10.854a.5.5 0 0 0 .708 0l2-2a.5.5 0 0 0-.708-.708L8.5 9.293V5.5a.5.5 0 0 0-1 0v3.793L6.354 8.146a.5.5 0 1 0-.708.708z"/>
 	<path d="M4.406 3.342A5.53 5.53 0 0 1 8 2c2.69 0 4.923 2 5.166 4.579C14.758 6.804 16 8.137 16 9.773 16 11.569 14.502 13 12.687 13H3.781C1.708 13 0 11.366 0 9.318c0-1.763 1.266-3.223 2.942-3.593.143-.863.698-1.723 1.464-2.383m.653.757c-.757.653-1.153 1.44-1.153 2.056v.448l-.445.049C2.064 6.805 1 7.952 1 9.318 1 10.785 2.23 12 3.781 12h8.906C13.98 12 15 10.988 15 9.773c0-1.216-1.02-2.228-2.313-2.228h-.5v-.5C12.188 4.825 10.328 3 8 3a4.53 4.53 0 0 0-2.941 1.1z"/>
 	</svg>`;
 };
 
-let AntiReptilianUA: string[] = ['netcraft'];
+let AntiReptilianUA = ['netcraft'];
 
 // 根据主机名选择对应的上游地址
-function routeByHosts(host: string): [string, boolean] {
+function routeByHosts(host) {
   // 定义路由表
-  const routes: Record<string, string> = {
+  const routes = {
     // 生产环境
     "quay": "quay.io",
     "gcr": "gcr.io",
@@ -47,14 +47,14 @@ function routeByHosts(host: string): [string, boolean] {
 }
 
 // 严格检测 URL 是否合法
-function isStrictValidUrl(urlString: string): boolean {
+function isStrictValidUrl(urlString) {
 	// 要求必须有 http(s):// 开头，并且域名中必须包含至少一个点（.）和合法的 TLD（至少2个字母）
 	const regex = /^https?:\/\/((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})(\/[^\s]*)?$/;
 	return regex.test(urlString);
   }
 
 /** @type {RequestInit} */
-const PREFLIGHT_INIT: RequestInit = {
+const PREFLIGHT_INIT = {
   // 预检请求配置
   headers: new Headers({
     'access-control-allow-origin': '*', // 允许所有来源
@@ -70,10 +70,10 @@ const PREFLIGHT_INIT: RequestInit = {
  * @param headers 响应头
  */
 function makeRes(
-  body: BodyInit | null,
-  status: number = 200,
-  headers: { [key: string]: string } = {}
-): Response {
+  body,
+  status = 200,
+  headers = {}
+) {
   headers['access-control-allow-origin'] = '*'; // 允许所有来源
   return new Response(body, { status, headers });
 }
@@ -81,9 +81,8 @@ function makeRes(
 /**
  * 构造新的URL对象
  * @param urlStr URL字符串
- * @param base URL base
  */
-function newUrl(urlStr: string): URL | null {
+function newUrl(urlStr) {
   try {
     // console.log(`Constructing new URL object with path ${urlStr}`);
     return new URL(urlStr);
@@ -93,7 +92,7 @@ function newUrl(urlStr: string): URL | null {
   }
 }
 
-async function nginx(): Promise<string> {
+async function nginx() {
   const text = `
   <!DOCTYPE html>
   <html>
@@ -124,7 +123,7 @@ async function nginx(): Promise<string> {
   return text;
 }
 
-async function searchInterface(): Promise<string> {
+async function searchInterface() {
   const html = `
   <!DOCTYPE html>
   <html>
@@ -363,13 +362,9 @@ async function searchInterface(): Promise<string> {
   return html;
 }
 
-interface ExtendedRequestInit extends RequestInit {
-  cacheTtl?: number;
-}
-
 export default {
-  async fetch(request: Request, env: any): Promise<Response> {
-		const getReqHeader = (key: string): string | null => request.headers.get(key);
+  async fetch(request, env) {
+		const getReqHeader = (key) => request.headers.get(key);
 
 		let url = new URL(request.url);
 		const homePage = url.origin;
@@ -411,7 +406,7 @@ export default {
 				break;
 
 			default:
-				let shortHost: [string, boolean] = routeByHosts(pathnameArray[1]);
+				let shortHost = routeByHosts(pathnameArray[1]);
 				// console.log(shortHost, pathnameFirst)
 
 				targetUrl = 'https://' + (shortHost[1]
@@ -435,7 +430,7 @@ export default {
 		url = new URL(targetUrl);
 
 		const userAgentHeader = request.headers.get('User-Agent');
-		const userAgent: string = userAgentHeader ? userAgentHeader.toLowerCase() : "null";
+		const userAgent = userAgentHeader ? userAgentHeader.toLowerCase() : "null";
 		if (env.UA) {
 			AntiReptilianUA = AntiReptilianUA.concat(await ADD(env.UA));
 		}
@@ -477,26 +472,26 @@ export default {
 		}
 		// console.log(url.toString());
 
-		return httpHandler(request, url.toString());
+		return httpHandler(request, url.toString(), env);
   },
 };
 
 /**
  * 处理HTTP请求
  * @param req 请求对象
- * @param pathname 请求路径
- * @param baseHost 基地址
+ * @param reqURL 请求路径
+ * @param env 环境变量
  */
-async function httpHandler(req: Request, reqURL: string): Promise<Response> {
+async function httpHandler(req, reqURL, env) {
 	// console.log(1, reqURL, reqURL);
-  const reqHdrRaw: Headers = req.headers;
+  const reqHdrRaw = req.headers;
 
   // 处理预检请求
   if (req.method === 'OPTIONS' && reqHdrRaw.has('access-control-request-headers')) {
     return new Response(null, PREFLIGHT_INIT);
   }
 
-  const rawLen: string = '';
+  const rawLen = '';
 
   const reqHdrNew = new Headers(reqHdrRaw);
   reqHdrNew.delete("Authorization"); // 修复s3错误
@@ -507,7 +502,14 @@ async function httpHandler(req: Request, reqURL: string): Promise<Response> {
 	// console.log(urlObj)
   if (!urlObj) return new Response("Bad URL", { status: 400 });
 
-  const reqInit: RequestInit = {
+  if (urlObj.hostname === 'api.github.com' && env && env.GITHUB_TOKEN) {
+    reqHdrNew.set('Authorization', `Bearer ${env.GITHUB_TOKEN}`);
+    if (!reqHdrNew.has('User-Agent')) {
+      reqHdrNew.set('User-Agent', 'Cloudflare-Worker');
+    }
+  }
+
+  const reqInit = {
     method: req.method,
     headers: reqHdrNew,
     redirect: 'follow',
@@ -522,10 +524,10 @@ async function httpHandler(req: Request, reqURL: string): Promise<Response> {
  * @param reqInit 请求初始化对象
  * @param rawLen 原始长度
  */
-async function proxy(urlObj: URL, reqInit: RequestInit, rawLen: string): Promise<Response> {
-  const res: Response = await fetch(urlObj.href, reqInit);
-  const resHdrOld: Headers = res.headers;
-  const resHdrNew: Headers = new Headers(resHdrOld);
+async function proxy(urlObj, reqInit, rawLen) {
+  const res = await fetch(urlObj.href, reqInit);
+  const resHdrOld = res.headers;
+  const resHdrNew = new Headers(resHdrOld);
 
 	// console.log(2, resHdrNew)
   // 处理重定向
@@ -535,13 +537,13 @@ async function proxy(urlObj: URL, reqInit: RequestInit, rawLen: string): Promise
 			return new Response("Location header is null", { status: 500 });
 		}
 		reqInit.redirect = "follow";
-		return proxy(new URL(location), reqInit, resHdrOld.get('content-length') as string);
+		return proxy(new URL(location), reqInit, resHdrOld.get('content-length'));
 	}
 
   // // 验证长度
   // if (rawLen) {
-  //   const newLen: string = resHdrOld.get('content-length') || '';
-  //   const badLen: boolean = (rawLen !== newLen);
+  //   const newLen = resHdrOld.get('content-length') || '';
+  //   const badLen = (rawLen !== newLen);
 
   //   if (badLen) {
   //     return makeRes(res.body, 400, {
@@ -551,7 +553,7 @@ async function proxy(urlObj: URL, reqInit: RequestInit, rawLen: string): Promise
   //   }
   // }
 
-  const status: number = res.status;
+  const status = res.status;
   resHdrNew.set('access-control-expose-headers', '*');
   resHdrNew.set('access-control-allow-origin', '*');
   resHdrNew.set('Cache-Control', 'max-age=1500');
@@ -567,7 +569,7 @@ async function proxy(urlObj: URL, reqInit: RequestInit, rawLen: string): Promise
   });
 }
 
-async function ADD(envadd: string): Promise<string[]> {
+async function ADD(envadd) {
   let addtext = envadd.replace(/[  |"'\r\n]+/g, ',').replace(/,+/g, ',');
   if (addtext.charAt(0) === ',') addtext = addtext.slice(1);
   if (addtext.charAt(addtext.length - 1) === ',') addtext = addtext.slice(0, addtext.length - 1);

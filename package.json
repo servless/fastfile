@@ -1,17 +1,18 @@
 {
 	"name": "fastfile",
-	"version": "0.2.1",
+	"version": "0.3.0",
 	"private": true,
 	"scripts": {
-		"deploy": "wrangler deploy src/index.ts",
-		"dev": "wrangler dev src/index.ts --local",
-		"publish": "wrangler deploy",
-		"pages": "wrangler pages deploy pages --project-name fastfile",
-		"start-stackblitz": "WRANGLER_SEND_METRICS=false wrangler dev src/index.ts --local",
+		"deploy": "wrangler deploy",
+		"deploy:workers": "sed -i -e 's#^//[[:space:]]*\"main\"#\"main\"#' -e 's#^[[:space:]]*\"pages_build_output_dir\".*#// & #' wrangler.jsonc && wrangler deploy",
+		"deploy:pages": "sed -i -e 's#^//[[:space:]]*\"pages_build_output_dir\"#\"pages_build_output_dir\"#' -e 's#^[[:space:]]*\"main\".*#// & #' wrangler.jsonc && wrangler pages deploy",
+		"dev": "wrangler dev",
+		"start": "wrangler dev",
 		"test": "vitest"
 	},
 	"devDependencies": {
-		"@cloudflare/workers-types": "4.20250303.0",
-		"vitest": "3.0.8"
+		"@cloudflare/vitest-pool-workers": "^0.12.4",
+		"vitest": "~3.2.0",
+		"wrangler": "^4.71.0"
 	}
 }

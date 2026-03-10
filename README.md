@@ -2,7 +2,7 @@
 
 基于 CloudFlare Workers / Pages 的文件加速下载
 
-**注意：本项目内置我自己的 51 网站统计代码,请自行删除或修改 [`src/index.ts`](src/index.ts#L9)**
+**注意：本项目内置我自己的 51 网站统计代码,请自行删除或修改 [`src/index.js`](src/index.js#L9)**
 
 ## 部署教程 - Workers
 
@@ -103,8 +103,29 @@
 
    在 **Compute (Workers)** -> **Workers & Pages** -> **Custom domains** -> **Add Custom Domain**（支持解析不在 CF 的域名），按钮以绑定域名。
 
+### 配置 GitHub Token (可选)
+
+为了避免 GitHub API 的速率限制（Rate Limit），建议配置 `GITHUB_TOKEN`：
+
+1. **生成 Token**：
+   - 访问 GitHub [Personal Access Tokens (classic)](https://github.com/settings/tokens)。
+   - 点击 **Generate new token (classic)**。
+   - 填写 Note（如 `fastfile-worker`），过期时间建议选择 **No expiration**（或根据需要选择）。
+   - **Scopes**：无需勾选任何权限（仅用于提高公共 API 的访问限额）。
+   - 点击底部的 **Generate token** 并复制生成的 Token。
+
+2. **设置 Secret**：
+   - 对于 **Workers**，在本地项目目录下执行：
+     ```bash
+     wrangler secret put GITHUB_TOKEN
+     ```
+   - 对于 **Pages**，在本地项目目录下执行：
+     ```bash
+     wrangler pages secret put GITHUB_TOKEN --project-name fastfile
+     ```
+   - 提示输入时，粘贴刚才复制的 Token 并回车。
+
 ## 仓库镜像
 
-- https://git.jetsung.com/servless/fastfile
-- https://framagit.org/servless/fastfile
-- https://github.com/servless/fastfile
+[MyCode](https://git.jetsung.com/servless/fastfile) ● [GitCode](https://gitcode.com/servless/fastfile) ● [GitHub](https://github.com/servless/fastfile)
+
